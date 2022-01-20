@@ -1,0 +1,119 @@
+NAME: hello
+LAST DEPLOYED: Tue Jan 18 14:39:32 2022
+NAMESPACE: default
+STATUS: pending-install
+REVISION: 1
+HOOKS:
+---
+# Source: mypro/templates/tests/test-connection.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "hello-mypro-test-connection"
+  labels:
+    helm.sh/chart: mypro-0.1.0
+    app.kubernetes.io/name: mypro
+    app.kubernetes.io/instance: hello
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['hello-mypro:80']
+  restartPolicy: Never
+MANIFEST:
+---
+# Source: mypro/templates/pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-storage
+  hostPath:
+    path: "/mnt/data"
+---
+# Source: mypro/templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc
+spec:
+  storageClassName: standard
+  accessModes:
+   - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi
+---
+# Source: mypro/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-mypro
+  labels:
+    helm.sh/chart: mypro-0.1.0
+    app.kubernetes.io/name: mypro
+    app.kubernetes.io/instance: hello
+    app.kubernetes.io/version: "1.16.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: mypro
+    app.kubernetes.io/instance: hello
+---
+# Source: mypro/templates/deployment.yaml
+apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - image: mysql:5.6
+        name: mysql
+        env:
+          # Use secret in real usage
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-password
+              key: rootpassword
+        ports:
+        - containerPort: 8080
+          name: mysql
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: pvc
+
+NOTES:
+1. Get the application URL by running these commands:
+  export POD_NAME=$(kubectl get pods --namespace default -l "app.kubernetes.io/name=mypro,app.kubernetes.io/instance=hello" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace default $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:8080 to use your application"
+  kubectl --namespace default port-forward $POD_NAME 8080:$CONTAINER_PORT
